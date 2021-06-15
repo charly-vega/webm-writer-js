@@ -60,7 +60,24 @@
         }
         
         /**
-         * Convert the given canvas to a WebP encoded image and return the image data as a string.
+         * Convert the given canvas to a WebP encoded image and return the image data as a string using toBlob.
+         */
+        function renderAsWebPAsync(canvas, quality, callback) {
+            canvas.toBlob(
+                function(blob) {
+                    var fileReader = new FileReader();
+                    fileReader.addEventListener('loadend', function() {
+                        callback(fileReader.result);
+                    });
+                    fileReader.readAsBinaryString(blob);
+                },
+                'image/webp',
+                {quality: quality}
+            )
+        }
+
+        /**
+         * Convert the given canvas to a WebP encoded image and return the image data as a string using toDataUrl.
          */
         function renderAsWebP(canvas, quality) {
             var
@@ -198,6 +215,9 @@
                 clusterStartTime = 0,
                 clusterDuration = 0,
                 
+                framesQueueSize = 0,
+                framesQueueEvents = new EventTarget(),
+
                 optionDefaults = {
                     quality: 0.95,       // WebM image quality from 0.0 (worst) to 1.0 (best)
                     fileWriter: null,    // Chrome FileWriter in order to stream to a file instead of buffering to memory (optional)
@@ -629,7 +649,55 @@
                     duration: options.frameDuration
                 });
             };
-            
+
+            /**
+             * Add a frame to the video asynchronously. Currently the frame must be a Canvas element.
+             */
+            this.addFrameAsync = function(canvas, callback) {
+                if (writtenHeader) {
+                    if (canvas.width != videoWidth || canvas.height != videoHeight) {
+                        throw "Frame size differs from previous frames";
+                    }
+                } else {
+                    videoWidth = canvas.width;
+                    videoHeight = canvas.height;
+
+                    writeHeader();
+                    writtenHeader = true;
+                }
+
+                // Can use renderAsWebPAsync
+                framesQueueAdd();
+
+                renderAsWebPAsync(canvas, {quality: options.quality}, function (webP) {
+                    if (!webP) {
+                        throw "Couldn't decode WebP frame, does the browser support WebP?";
+                    }
+
+                    addFrameToCluster({
+                        frame: extractKeyframeFromWebP(webP),
+                        duration: options.frameDuration
+                    });
+
+                    framesQueueRemove();
+
+                    if (callback) {
+                        callback();
+                    }
+                });
+            };
+
+            function framesQueueAdd() {
+                framesQueueSize++;
+            };
+
+            function framesQueueRemove() {
+                framesQueueSize--;
+                if (framesQueueSize == 0) {
+                    framesQueueEvents.dispatchEvent(new CustomEvent('done'));
+                }
+            };
+
             /**
              * Finish writing the video and return a Promise to signal completion.
              *
@@ -637,13 +705,25 @@
              * a Blob with the contents of the entire video.
              */
             this.complete = function() {
-                flushClusterFrameBuffer();
-                
-                writeCues();
-                rewriteSeekHead();
-                rewriteDuration();
-                
-                return blobBuffer.complete('video/webm');
+                function writeWebM() {
+                    flushClusterFrameBuffer();
+
+                    writeCues();
+                    rewriteSeekHead();
+                    rewriteDuration();
+
+                    return blobBuffer.complete('video/webm');
+                };
+                if (framesQueueSize > 0) {
+                    // There are still outstanding `renderAsWebPAsync` calls
+                    return new Promise(function (resolve, _reject) {
+                        framesQueueEvents.addEventListener('done', function() {
+                            resolve(writeWebM());
+                        });
+                    })
+                } else {
+                    return writeWebM();
+                }
             };
             
             this.getWrittenSize = function() {
