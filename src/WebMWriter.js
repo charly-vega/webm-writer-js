@@ -416,6 +416,7 @@
                     bufferStream = new ArrayBufferDataStream(256);
                     
                 writeEBML(bufferStream, blobBuffer.pos, [ebmlHeader, ebmlSegment]);
+                
                 blobBuffer.write(bufferStream.getAsDataArray());
                 
                 // Now we know where these top-level elements lie in the file:
@@ -524,6 +525,7 @@
              * Flush the frames in the current clusterFrameBuffer out to the stream as a Cluster.
              */
             function flushClusterFrameBuffer() {
+                clusterFrameBuffer = clusterFrameBuffer.filter(Boolean);
                 if (clusterFrameBuffer.length == 0) {
                     return;
                 }
@@ -569,12 +571,12 @@
             }
             
             function addFrameToCluster(frame) {
+                const key = frame.key; 
                 frame.trackNumber = DEFAULT_TRACK_NUMBER;
                 
                 // Frame timecodes are relative to the start of their cluster:
                 frame.timecode = Math.round(clusterDuration);
-    
-                clusterFrameBuffer.push(frame);
+                clusterFrameBuffer[key] = frame;
                 
                 clusterDuration += frame.duration;
                 
@@ -653,7 +655,7 @@
             /**
              * Add a frame to the video asynchronously. Currently the frame must be a Canvas element.
              */
-            this.addFrameAsync = function(canvas, callback) {
+            this.addFrameAsync = function(canvas, key, callback) {
                 if (writtenHeader) {
                     if (canvas.width != videoWidth || canvas.height != videoHeight) {
                         throw "Frame size differs from previous frames";
@@ -661,7 +663,7 @@
                 } else {
                     videoWidth = canvas.width;
                     videoHeight = canvas.height;
-
+                    
                     writeHeader();
                     writtenHeader = true;
                 }
@@ -675,6 +677,7 @@
                     }
 
                     addFrameToCluster({
+                        key,
                         frame: extractKeyframeFromWebP(webP),
                         duration: options.frameDuration
                     });
