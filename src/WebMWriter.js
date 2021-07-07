@@ -97,7 +97,7 @@
             
             // Skip the header and the 4 bytes that encode the length of the VP8 chunk
             keyframeStartIndex += 'VP8 '.length + 4;
-            
+
             return webP.substring(keyframeStartIndex);
         }
         
@@ -214,6 +214,7 @@
                 clusterFrameBuffer = [],
                 clusterStartTime = 0,
                 clusterDuration = 0,
+                clusterFirstFrameKey = null,
                 
                 framesQueueSize = 0,
                 framesQueueEvents = new EventTarget(),
@@ -557,6 +558,7 @@
                 clusterFrameBuffer = [];
                 clusterStartTime += clusterDuration;
                 clusterDuration = 0;
+                clusterFirstFrameKey = null;
             }
             
             function validateOptions() {
@@ -570,13 +572,21 @@
                 }
             }
             
-            function addFrameToCluster(frame) {
-                const key = frame.key; 
+            function addFrameToCluster(frame, key) {
                 frame.trackNumber = DEFAULT_TRACK_NUMBER;
                 
-                // Frame timecodes are relative to the start of their cluster:
-                frame.timecode = Math.round(clusterDuration);
-                clusterFrameBuffer[key] = frame;
+                if (key != undefined) {
+		    if (clusterFirstFrameKey == null) {
+		        clusterFirstFrameKey = key;
+		    }
+
+                    clusterFrameBuffer[key] = frame;
+                    frame.timecode = Math.round((key - clusterFirstFrameKey) * frame.duration);
+                } else {
+                    clusterFrameBuffer.push(frame);
+                    // Frame timecodes are relative to the start of their cluster:
+                    frame.timecode = Math.round(clusterDuration);
+                }
                 
                 clusterDuration += frame.duration;
                 
@@ -677,10 +687,9 @@
                     }
 
                     addFrameToCluster({
-                        key,
                         frame: extractKeyframeFromWebP(webP),
                         duration: options.frameDuration
-                    });
+                    }, key);
 
                     framesQueueRemove();
 
