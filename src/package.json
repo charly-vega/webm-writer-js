@@ -1,6 +1,6 @@
 {
-  "name": "webm-writer",
-  "version": "0.2.0",
+  "name": "@creator-kit/webm-writer",
+  "version": "0.2.2",
   "description": "Render WebM videos from Canvas frames",
   "main": "WebMWriter.js",
   "scripts": {
@@ -8,12 +8,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/thenickdude/webm-writer-js.git"
+    "url": "git+https://github.com/creator-kit/webm-writer-js.git"
   },
   "author": "Nicholas Sherlock",
   "license": "WTFPL",
   "bugs": {
-    "url": "https://github.com/thenickdude/webm-writer-js/issues"
+    "url": "https://github.com/creator-kit/webm-writer-js/issues"
   },
-  "homepage": "https://github.com/thenickdude/webm-writer-js#readme"
+  "homepage": "https://github.com/creator-kit/webm-writer-js#readme"
 }
